@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import mermaid from "mermaid";
+// IMPACT: This imports the image you just uploaded
+import logo from './logo.png';
 
 export default function FamilyTreeApp() {
   const [people, setPeople] = useState({
@@ -13,14 +15,13 @@ export default function FamilyTreeApp() {
   const treeRef = useRef(null);
 
   useEffect(() => {
-    // We initialize with a specific theme configuration here
     mermaid.initialize({ 
       startOnLoad: false,
       theme: 'base',
       themeVariables: {
         primaryColor: '#ffffff',
         primaryTextColor: '#000000',
-        primaryBorderColor: '#ff0000',
+        primaryBorderColor: '#b91c1c',
         lineColor: '#000000',
         secondaryColor: '#f4f4f4',
         tertiaryColor: '#fff'
@@ -35,22 +36,15 @@ export default function FamilyTreeApp() {
   async function renderTree() {
     if (!treeRef.current) return;
 
-    // We start the chart definition
     let chart = `flowchart TD\n`;
-
-    // 1. ADD STYLING DEFINITIONS (The "Graphics" Code)
-    // This says: Fill with white, Red Borders, Rounded Corners (rx, ry)
     chart += `classDef mainNode fill:#fff,stroke:#b91c1c,stroke-width:2px,rx:10,ry:10,color:#000;\n`;
     chart += `linkStyle default stroke:#000,stroke-width:2px;\n`;
 
-    // 2. Draw Nodes
     Object.values(people).forEach(p => {
       const safeName = p.name.replace(/"/g, "'");
-      // We attach the ':::mainNode' style to every person
       chart += `${p.id}["<b>${safeName}</b><br/>${p.birth}${p.death ? ` - ${p.death}` : ""}"]:::mainNode\n`;
     });
 
-    // 3. Draw Links
     Object.values(people).forEach(p => {
       if (p.parents && p.parents.length > 0) {
         p.parents.forEach(parId => {
@@ -99,8 +93,18 @@ export default function FamilyTreeApp() {
   return (
     <div style={{ padding: "40px", fontFamily: "Helvetica, Arial, sans-serif", backgroundColor: "#f9fafb", minHeight: "100vh" }}>
       <div style={{ maxWidth: "800px", margin: "0 auto" }}>
-        <h1 style={{ textAlign: "center", color: "#b91c1c", marginBottom: "30px" }}>Batarseh Family Tree</h1>
         
+        {/* LOGO SECTION START */}
+        <div style={{ textAlign: "center", marginBottom: "20px" }}>
+          <img 
+            src={logo} 
+            alt="Batarseh Logo" 
+            style={{ width: "150px", height: "auto", marginBottom: "15px" }} 
+          />
+          <h1 style={{ color: "#b91c1c", margin: "0" }}>Batarseh Family Tree</h1>
+        </div>
+        {/* LOGO SECTION END */}
+
         <div style={{ display: "flex", justifyContent: "center", marginBottom: "20px" }}>
            <button onClick={openAdd} style={{ 
              padding: "10px 20px", 
@@ -115,7 +119,6 @@ export default function FamilyTreeApp() {
            </button>
         </div>
 
-        {/* The Family Tree Diagram */}
         <div ref={treeRef} style={{ 
           background: "white", 
           padding: "30px", 
