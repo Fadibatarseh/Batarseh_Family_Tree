@@ -12,6 +12,7 @@ export default function FamilyTreeApp() {
   const [form, setForm] = useState({ name: "", birth: "", death: "", img_url: "", parents: [] });
   const treeRef = useRef(null);
 
+  // --- MERMAID INIT ---
   useEffect(() => {
     mermaid.initialize({ 
       startOnLoad: false,
@@ -29,6 +30,7 @@ export default function FamilyTreeApp() {
     });
   }, []); 
 
+  // --- FETCH DATA ---
   useEffect(() => { fetchPeople(); }, []);
 
   async function fetchPeople() {
@@ -43,6 +45,7 @@ export default function FamilyTreeApp() {
     finally { setLoading(false); }
   }
 
+  // --- RENDER TREE ---
   useEffect(() => { if (!loading) renderTree(); }, [people, loading]);
 
   async function renderTree() {
@@ -70,6 +73,7 @@ export default function FamilyTreeApp() {
     catch (error) { console.error("Mermaid Render Error:", error); }
   }
 
+  // --- HANDLERS ---
   function openEdit(id) {
     const p = people[id];
     setCurrentEdit(id);
@@ -103,16 +107,19 @@ export default function FamilyTreeApp() {
     setModalOpen(false);
   }
 
+  // --- RENDER UI ---
   return (
     <div style={styles.pageContainer}>
+      {/* HEADER POSTER */}
       <div style={styles.heroSection}>
         <div style={styles.heroContent}>
-            <img src={logo} alt="Batarseh Logo" style={styles.bigLogo} />
+            <img src={logo} alt="Logo" style={styles.bigLogo} />
             <h1 style={styles.heroTitle}>The Batarseh Family</h1>
             <p style={styles.heroSubtitle}>Scroll down to explore our history</p>
         </div>
       </div>
 
+      {/* SCROLLABLE SHEET */}
       <div style={styles.contentLayer}>
         <div style={styles.contentInner}>
             <div style={styles.actionBar}>
@@ -143,53 +150,61 @@ export default function FamilyTreeApp() {
         </div>
       </div>
 
+      {/* POPUP MODAL */}
       {modalOpen && (
         <div style={styles.modalOverlay}>
           <div style={styles.modalBox}>
-            <h3 style={{ margin: "0 0 20px 0" }}>{currentEdit ? "Edit Profile"
-              const styles = {
-  pageContainer: {
-    fontFamily: "'Georgia', 'Times New Roman', serif",
-    minHeight: "100vh",
-    backgroundColor: "#2c0b0e", 
-  },
-  heroSection: {
-    position: "fixed",
-    top: 0, left: 0, width: "100%", height: "90vh",
-    display: "flex", alignItems: "center", justifyContent: "center",
-    zIndex: 0,
-    background: "linear-gradient(to bottom, #2c0b0e, #5c181f)",
-    color: "white", textAlign: "center"
-  },
-  heroContent: { marginTop: "-100px" },
-  bigLogo: {
-    width: "450px", 
-    height: "auto",
-    filter: "drop-shadow(0 0 20px rgba(0,0,0,0.5))"
-  },
-  heroTitle: {
-    fontSize: "3em", fontWeight: "normal", margin: "20px 0 10px 0", letterSpacing: "2px"
-  },
-  heroSubtitle: { fontSize: "1.2em", opacity: 0.8, fontStyle: "italic" },
+            <h3 style={{ margin: "0 0 20px 0" }}>{currentEdit ? "Edit Profile" : "Add New Member"}</h3>
+            <label style={styles.label}>Full Name</label>
+            <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} style={styles.input} />
+            <div style={{display:"flex", gap:"10px"}}>
+                <div style={{flex:1}}>
+                    <label style={styles.label}>Birth Year</label>
+                    <input value={form.birth} onChange={e => setForm({ ...form, birth: e.target.value })} style={styles.input} />
+                </div>
+                <div style={{flex:1}}>
+                    <label style={styles.label}>Death Year</label>
+                    <input value={form.death} onChange={e => setForm({ ...form, death: e.target.value })} style={styles.input} />
+                </div>
+            </div>
+            <label style={styles.label}>Photo URL</label>
+            <input placeholder="https://..." value={form.img_url} onChange={e => setForm({ ...form, img_url: e.target.value })} style={styles.input} />
+            <div>
+               <label style={styles.label}>Parents:</label>
+               <div style={styles.parentList}>
+                 {Object.values(people).filter(p => p.id !== currentEdit).map(p => (
+                     <div key={p.id} style={{ display: "flex", alignItems: "center", marginBottom: "5px" }}>
+                       <input type="checkbox" checked={(form.parents || []).includes(p.id)} onChange={() => toggleParent(p.id)} style={{ marginRight: "10px" }} />
+                       <span>{p.name}</span>
+                     </div>
+                   ))}
+               </div>
+            </div>
+            <div style={{ display: "flex", gap: "10px", marginTop: "20px" }}>
+              <button onClick={save} style={styles.saveButton}>Save</button>
+              <button onClick={() => setModalOpen(false)} style={styles.cancelButton}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
-  contentLayer: {
-    position: "relative",
-    zIndex: 10,
-    marginTop: "85vh",
-    backgroundColor: "#f4f1ea",
-    minHeight: "100vh",
-    boxShadow: "0 -20px 50px rgba(0,0,0,0.5)",
-    borderTopLeftRadius: "30px", borderTopRightRadius: "30px",
-    paddingBottom: "100px"
-  },
+// === ALL STYLES ===
+const styles = {
+  pageContainer: { fontFamily: "'Georgia', 'Times New Roman', serif", minHeight: "100vh", backgroundColor: "#2c0b0e" },
+  heroSection: { position: "fixed", top: 0, left: 0, width: "100%", height: "90vh", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 0, background: "linear-gradient(to bottom, #2c0b0e, #5c181f)", color: "white", textAlign: "center" },
+  heroContent: { marginTop: "-100px" },
+  bigLogo: { width: "450px", height: "auto", filter: "drop-shadow(0 0 20px rgba(0,0,0,0.5))" },
+  heroTitle: { fontSize: "3em", fontWeight: "normal", margin: "20px 0 10px 0", letterSpacing: "2px" },
+  heroSubtitle: { fontSize: "1.2em", opacity: 0.8, fontStyle: "italic" },
+  contentLayer: { position: "relative", zIndex: 10, marginTop: "85vh", backgroundColor: "#f4f1ea", minHeight: "100vh", boxShadow: "0 -20px 50px rgba(0,0,0,0.5)", borderTopLeftRadius: "30px", borderTopRightRadius: "30px", paddingBottom: "100px" },
   contentInner: { maxWidth: "1200px", margin: "0 auto", padding: "40px 20px" },
   actionBar: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" },
   addButton: { padding: "10px 20px", background: "#b91c1c", color: "#fff", border: "none", borderRadius: "30px", cursor: "pointer", fontWeight: "bold" },
   memberCount: { color: "#555", fontStyle: "italic" },
-  treeContainer: {
-    background: "white", borderRadius: "10px", boxShadow: "0 5px 15px rgba(0,0,0,0.05)",
-    padding: "20px", minHeight: "400px", overflow: "auto", border: "1px solid #ddd"
-  },
+  treeContainer: { background: "white", borderRadius: "10px", boxShadow: "0 5px 15px rgba(0,0,0,0.05)", padding: "20px", minHeight: "400px", overflow: "auto", border: "1px solid #ddd" },
   databaseSection: { marginTop: "50px" },
   sectionTitle: { borderBottom: "2px solid #b91c1c", display: "inline-block", paddingBottom: "5px", marginBottom: "20px", color: "#444" },
   grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "15px" },
