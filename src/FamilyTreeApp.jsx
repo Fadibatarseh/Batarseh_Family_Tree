@@ -171,13 +171,21 @@ export default function FamilyTreeApp() {
   );
 }
 
+// === ALL STYLES (UPDATED BEIGE THEME) ===
 const styles = {
-  pageContainer: { fontFamily: "'Georgia', 'Times New Roman', serif", minHeight: "100vh", backgroundColor: "#2c0b0e" },
+  pageContainer: {
+    fontFamily: "'Georgia', 'Times New Roman', serif",
+    minHeight: "100vh",
+    backgroundColor: "#f4f1ea", // Base color is now beige
+  },
   
+  // --- HERO SECTION (FIXED BACKGROUND) ---
   heroSection: { 
     position: "fixed", top: 0, left: 0, width: "100%", height: "90vh", 
     display: "flex", alignItems: "center", justifyContent: "center", zIndex: 0, 
-    background: "linear-gradient(to bottom, #2c0b0e, #5c181f)", color: "white", textAlign: "center" 
+    backgroundColor: "#f4f1ea", // Solid beige background
+    // Removed the dark red gradient
+    textAlign: "center" 
   },
   heroContent: { 
     width: "100%", height: "100%", 
@@ -185,27 +193,40 @@ const styles = {
     padding: "20px" 
   },
   
-  // --- UPDATED LOGO STYLE ---
   bigLogo: { 
-    maxWidth: "90vw",   // 90% of screen width
-    maxHeight: "70vh",  // 70% of screen height (leaves room for text)
-    width: "auto", 
-    height: "auto", 
-objectFit: "contain", // Ensures it never gets squished or cut off
-    filter: "drop-shadow(0 0 20px rgba(0,0,0,0.5))" 
+    maxWidth: "80vw", maxHeight: "60vh", width: "auto", height: "auto", 
+    objectFit: "contain",
+    // Removed drop-shadow for a cleaner look on beige
   },
   
-  heroTitle: { fontSize: "2.5em", fontWeight: "normal", margin: "20px 0 5px 0", letterSpacing: "2px" },
-  heroSubtitle: { fontSize: "1.2em", opacity: 0.8, fontStyle: "italic" },
+  // --- RED TEXT ---
+  heroTitle: { 
+    fontSize: "2.5em", fontWeight: "normal", margin: "20px 0 5px 0", letterSpacing: "2px",
+    color: "#b91c1c" // Red text matching logo
+  },
+  heroSubtitle: { 
+    fontSize: "1.2em", fontStyle: "italic",
+    color: "#b91c1c", // Red text
+    opacity: 0.8 
+  },
 
-  contentLayer: { position: "relative", zIndex: 10, marginTop: "85vh", backgroundColor: "#f4f1ea", minHeight: "100vh", boxShadow: "0 -20px 50px rgba(0,0,0,0.5)", borderTopLeftRadius: "30px", borderTopRightRadius: "30px", paddingBottom: "100px" },
+  // --- CONTENT LAYER (SLIDES OVER) ---
+  contentLayer: { 
+    position: "relative", zIndex: 10, marginTop: "85vh", 
+    backgroundColor: "#f4f1ea", // Matches hero background for seamless look
+    minHeight: "100vh", 
+    // Added a subtle shadow so you can see it sliding over
+    boxShadow: "0 -10px 30px rgba(185, 28, 28, 0.1)", 
+    borderTopLeftRadius: "30px", borderTopRightRadius: "30px", paddingBottom: "100px" 
+  },
   contentInner: { maxWidth: "1200px", margin: "0 auto", padding: "40px 20px" },
   actionBar: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" },
   addButton: { padding: "10px 20px", background: "#b91c1c", color: "#fff", border: "none", borderRadius: "30px", cursor: "pointer", fontWeight: "bold" },
-  memberCount: { color: "#555", fontStyle: "italic" },
-  treeContainer: { background: "white", borderRadius: "10px", boxShadow: "0 5px 15px rgba(0,0,0,0.05)", padding: "20px", minHeight: "400px", overflow: "auto", border: "1px solid #ddd" },
+  memberCount: { color: "#b91c1c", fontStyle: "italic" }, // Changed to red
+  
+  treeContainer: { background: "white", borderRadius: "10px", boxShadow: "0 5px 15px rgba(0,0,0,0.05)", padding: "20px", minHeight: "400px", overflow: "auto", border: "1px solid #e5e7eb" },
   databaseSection: { marginTop: "50px" },
-  sectionTitle: { borderBottom: "2px solid #b91c1c", display: "inline-block", paddingBottom: "5px", marginBottom: "20px", color: "#444" },
+  sectionTitle: { borderBottom: "2px solid #b91c1c", display: "inline-block", paddingBottom: "5px", marginBottom: "20px", color: "#b91c1c" }, // Changed to red
   grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "15px" },
   card: { display: "flex", alignItems: "center", gap: "10px", padding: "10px", background: "white", border: "1px solid #ddd", borderRadius: "8px", cursor: "pointer", textAlign: "left" },
   cardImgContainer: { width: "40px", height: "40px", borderRadius: "50%", overflow: "hidden", flexShrink: 0, backgroundColor: "#eee" },
