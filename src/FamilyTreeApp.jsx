@@ -1,28 +1,24 @@
 import { useEffect, useState, useRef } from 'react';
 import mermaid from "mermaid";
+import { supabase } from './supabaseClient';
 import logo from './logo.png';
 
 export default function FamilyTreeApp() {
-  const [people, setPeople] = useState({
-    "1": { id: "1", name: "Grandparent", birth: "1950", death: "", img: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png", parents: [], children: [] },
-    "2": { id: "2", name: "You", birth: "1980", death: "", img: "https://cdn-icons-png.flaticon.com/512/3135/3135768.png", parents: ["1"], children: [] }
-  });
+  const [people, setPeople] = useState({});
+  const [loading, setLoading] = useState(true);
   
   const [currentEdit, setCurrentEdit] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", birth: "", death: "", img: "", parents: [] });
+  const [form, setForm] = useState({ name: "", birth: "", death: "", img_url: "", parents: [] });
   const treeRef = useRef(null);
 
+  // 1. INITIALIZE MERMAID
   useEffect(() => {
     mermaid.initialize({ 
       startOnLoad: false,
-      // SECURITY LEVEL LOOSE allows HTML (Images) to work
       securityLevel: 'loose',
       theme: 'base',
-      flowchart: {
-        // This makes the lines curve nicely like a family tree
-        curve: 'stepAfter' 
-      },
+      flowchart: { curve: 'stepAfter' },
       themeVariables: {
         primaryColor: '#ffffff',
         primaryTextColor: '#000000',
@@ -34,41 +30,57 @@ export default function FamilyTreeApp() {
     });
   }, []); 
 
+  // 2. FETCH DATA FROM SUPABASE
   useEffect(() => {
-    renderTree();
-  }, [people]);
+    fetchPeople();
+  }, []);
+
+  async function fetchPeople() {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase.from('family_members').select('*');
+      
+      if (error) throw error;
+
+      // Convert Array from DB back to Object for our app logic
+      const peopleObject = {};
+      data.forEach(person => {
+        peopleObject[person.id] = person;
+      });
+      
+      setPeople(peopleObject);
+    } catch (error) {
+      console.error("Error loading family:", error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // 3. RENDER TREE WHEN PEOPLE CHANGE
+  useEffect(() => {
+    if (!loading) renderTree();
+  }, [people, loading]);
 
   async function renderTree() {
-    if (!treeRef.current) return;
+    if (!treeRef.current || Object.keys(people).length === 0) return;
 
-    // We use "flowchart TD" (Top Down)
     let chart = `flowchart TD\n`;
-    
-    // Styling classes
     chart += `classDef mainNode fill:#fff,stroke:#b91c1c,stroke-width:2px,rx:5,ry:5,color:#000,width:150px;\n`;
-    // Make lines thicker and gray
     chart += `linkStyle default stroke:#666,stroke-width:2px;\n`;
 
-    // 1. Draw Nodes with HTML Images
     Object.values(people).forEach(p => {
       const safeName = p.name.replace(/"/g, "'");
-      
-      // Check if they have an image, otherwise use a placeholder or nothing
-      const imgTag = p.img 
-        ? `<img src='${p.img}' width='60' height='60' style='border-radius:50%; object-fit:cover; margin-bottom:5px;' /><br/>` 
+      // Use img_url from DB
+      const imgTag = p.img_url 
+        ? `<img src='${p.img_url}' width='60' height='60' style='border-radius:50%; object-fit:cover; margin-bottom:5px;' /><br/>` 
         : "";
-
-      // We use brackets () instead of [] to make the nodes rounded rectangles
-      // We inject the HTML inside the label
       chart += `${p.id}("${imgTag}<b>${safeName}</b><br/><span style='font-size:0.8em'>${p.birth}${p.death ? ` - ${p.death}` : ""}</span>"):::mainNode\n`;
     });
 
-    // 2. Draw Links
     Object.values(people).forEach(p => {
       if (p.parents && p.parents.length > 0) {
         p.parents.forEach(parId => {
           if (people[parId]) {
-            // Draw the connection
             chart += `${parId} --> ${p.id}\n`;
           }
         });
@@ -76,13 +88,10 @@ export default function FamilyTreeApp() {
     });
 
     treeRef.current.innerHTML = `<pre class="mermaid" style="width: 100%; height: 100%;">${chart}</pre>`;
-    
     try {
-      await mermaid.run({
-        nodes: treeRef.current.querySelectorAll('.mermaid'),
-      });
+      await mermaid.run({ nodes: treeRef.current.querySelectorAll('.mermaid') });
     } catch (error) {
-      console.error("Mermaid failed to render:", error);
+      console.error("Mermaid Render Error:", error);
     }
   }
 
@@ -95,7 +104,7 @@ export default function FamilyTreeApp() {
 
   function openAdd() {
     setCurrentEdit(null);
-    setForm({ name: "", birth: "", death: "", img: "", parents: [] });
+    setForm({ name: "", birth: "", death: "", img_url: "", parents: [] });
     setModalOpen(true);
   }
 
@@ -108,13 +117,30 @@ export default function FamilyTreeApp() {
     }
   }
 
-  function save() {
-    const updated = { ...people };
-    const id = currentEdit || String(Date.now());
-    const existing = updated[id] || { children: [] };
-    
-    updated[id] = { ...existing, ...form, id, parents: form.parents };
-    setPeople(updated);
+  // 4. SAVE TO SUPABASE
+  async function save() {
+    // If no ID (New Person), we don't send an ID so Supabase creates one
+    // If ID exists (Edit), we send it to update
+    const personData = {
+      name: form.name,
+      birth: form.birth,
+      death: form.death,
+      img_url: form.img_url,
+      parents: form.parents
+    };
+
+    if (currentEdit) {
+      // Update existing
+      const { error } = await supabase.from('family_members').update(personData).eq('id', currentEdit);
+      if (error) alert("Error updating: " + error.message);
+    } else {
+      // Insert new
+      const { error } = await supabase.from('family_members').insert([personData]);
+      if (error) alert("Error adding: " + error.message);
+    }
+
+    // Refresh data from server
+    await fetchPeople();
     setModalOpen(false);
   }
 
@@ -122,9 +148,8 @@ export default function FamilyTreeApp() {
     <div style={{ padding: "40px", fontFamily: "Helvetica, Arial, sans-serif", backgroundColor: "#f9fafb", minHeight: "100vh" }}>
       <div style={{ maxWidth: "1000px", margin: "0 auto" }}>
         
-        {/* LOGO */}
         <div style={{ textAlign: "center", marginBottom: "20px" }}>
-          <img src={logo} alt="Batarseh Logo" style={{ width: "120px", height: "auto", marginBottom: "15px" }} />
+          <img src={logo} alt="Logo" style={{ width: "120px", height: "auto", marginBottom: "15px" }} />
           <h1 style={{ color: "#b91c1c", margin: "0" }}>Batarseh Family Tree</h1>
         </div>
 
@@ -134,22 +159,11 @@ export default function FamilyTreeApp() {
            </button>
         </div>
 
-        {/* SCROLLABLE CONTAINER 
-            This div now has 'overflow: auto'. If the tree gets huge, 
-            you scroll to see it. It won't shrink to microscopic size.
-        */}
         <div style={{ 
-          background: "white", 
-          padding: "20px", 
-          borderRadius: "15px", 
-          boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
-          height: "600px",       // Fixed Height
-          overflow: "auto",      // ENABLE SCROLLING
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "flex-start" // Align to top
+          background: "white", padding: "20px", borderRadius: "15px", boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+          height: "600px", overflow: "auto", display: "flex", justifyContent: "center", alignItems: "flex-start" 
         }}>
-          <div ref={treeRef} style={{ minWidth: "100%" }} />
+          {loading ? <p>Loading family data...</p> : <div ref={treeRef} style={{ minWidth: "100%" }} />}
         </div>
 
         <div style={{ marginTop: "40px", borderTop: "2px solid #eee", paddingTop: "20px" }}>
@@ -161,8 +175,7 @@ export default function FamilyTreeApp() {
                 onClick={() => openEdit(p.id)}
                 style={{ padding: "8px 12px", background: "#fff", border: "1px solid #ddd", borderRadius: "20px", cursor: "pointer", fontSize: "0.9em", display: "flex", alignItems: "center", gap: "5px" }}
               >
-                {/* Small preview of face in button */}
-                {p.img && <img src={p.img} style={{width:20, height:20, borderRadius:"50%"}} />}
+                {p.img_url && <img src={p.img_url} style={{width:20, height:20, borderRadius:"50%"}} />}
                 {p.name}
               </button>
             ))}
@@ -172,10 +185,8 @@ export default function FamilyTreeApp() {
 
       {modalOpen && (
         <div style={{
-          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-          background: "rgba(0,0,0,0.5)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          zIndex: 1000
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)",
+          display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000
         }}>
           <div style={{ background: "white", padding: "30px", width: "400px", borderRadius: "10px", display: "flex", flexDirection: "column", gap: "15px", boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)", maxHeight: "90vh", overflowY: "auto" }}>
             <h3 style={{ margin: 0 }}>{currentEdit ? "Edit" : "Add"} Person</h3>
@@ -194,27 +205,15 @@ export default function FamilyTreeApp() {
                 </div>
             </div>
 
-            {/* NEW IMAGE INPUT */}
-            <label style={labelStyle}>Image URL (Paste link to photo)</label>
-            <input 
-                placeholder="https://example.com/photo.jpg" 
-                value={form.img} 
-                onChange={e => setForm({ ...form, img: e.target.value })} 
-                style={inputStyle} 
-            />
+            <label style={labelStyle}>Image URL</label>
+            <input placeholder="https://..." value={form.img_url} onChange={e => setForm({ ...form, img_url: e.target.value })} style={inputStyle} />
             
             <div>
                <label style={labelStyle}>Select Parents:</label>
                <div style={{ border: "1px solid #ccc", padding: "10px", borderRadius: "5px", maxHeight: "150px", overflowY: "scroll", background: "#f9f9f9" }}>
-                 {Object.values(people).length === 0 && <span style={{color:"#999", fontSize:"0.8em"}}>No other members yet.</span>}
                  {Object.values(people).filter(p => p.id !== currentEdit).map(p => (
                      <div key={p.id} style={{ display: "flex", alignItems: "center", marginBottom: "5px" }}>
-                       <input 
-                         type="checkbox" 
-                         checked={(form.parents || []).includes(p.id)}
-                         onChange={() => toggleParent(p.id)}
-                         style={{ marginRight: "8px" }}
-                       />
+                       <input type="checkbox" checked={(form.parents || []).includes(p.id)} onChange={() => toggleParent(p.id)} style={{ marginRight: "8px" }} />
                        <span style={{ fontSize: "0.9em" }}>{p.name}</span>
                      </div>
                    ))}
