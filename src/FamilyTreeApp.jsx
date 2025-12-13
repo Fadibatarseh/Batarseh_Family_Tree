@@ -129,36 +129,29 @@ export default function FamilyTreeApp() {
   return (
     <div style={styles.pageContainer}>
       
-      {/* FIXED HEADER SECTION (The "Poster" on the wall) 
-          This stays still while you scroll over it.
-      */}
+      {/* FIXED HEADER SECTION */}
       <div style={styles.heroSection}>
         <div style={styles.heroContent}>
-            {/* HUGE LOGO (Approx 5 inches / 480px) */}
+            {/* HUGE LOGO */}
             <img src={logo} alt="Batarseh Logo" style={styles.bigLogo} />
             <h1 style={styles.heroTitle}>The Batarseh Family</h1>
             <p style={styles.heroSubtitle}>Scroll down to explore our history</p>
         </div>
       </div>
 
-      {/* SCROLLABLE CONTENT (The "Sheet" that slides up)
-          This starts lower down the page and covers the logo.
-      */}
+      {/* SCROLLABLE CONTENT */}
       <div style={styles.contentLayer}>
         
         <div style={styles.contentInner}>
-            {/* Action Bar inside the white sheet */}
             <div style={styles.actionBar}>
                 <span style={styles.memberCount}>{Object.keys(people).length} Members Found</span>
                 <button onClick={openAdd} style={styles.addButton}>+ Add Member</button>
             </div>
 
-            {/* The Tree Diagram */}
             <div style={styles.treeContainer}>
                 {loading ? <p style={{textAlign:"center", padding:20}}>Loading...</p> : <div ref={treeRef} />}
             </div>
 
-            {/* The Grid Database */}
             <div style={styles.databaseSection}>
                 <h3 style={styles.sectionTitle}>Family Database</h3>
                 <div style={styles.grid}>
@@ -229,49 +222,48 @@ const styles = {
   pageContainer: {
     fontFamily: "'Georgia', 'Times New Roman', serif",
     minHeight: "100vh",
-    backgroundColor: "#2c0b0e", // Background matches header color so no gaps show
+    backgroundColor: "#2c0b0e", 
   },
-  
-  // PARALLAX HERO SECTION
   heroSection: {
-    position: "fixed", // Stays put!
-    top: 0,
-    left: 0,
-    width: "100%",
-    height: "90vh", // Covers most of the initial screen
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 0, // Sits behind the content
+    position: "fixed",
+    top: 0, left: 0, width: "100%", height: "90vh",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    zIndex: 0,
     background: "linear-gradient(to bottom, #2c0b0e, #5c181f)",
-    color: "white",
-    textAlign: "center"
+    color: "white", textAlign: "center"
   },
-  heroContent: {
-    marginTop: "-100px", // Slight nudge up for balance
-  },
+  heroContent: { marginTop: "-100px" },
   bigLogo: {
-    width: "450px", // ~5 inches on standard screen
+    width: "450px", 
     height: "auto",
     filter: "drop-shadow(0 0 20px rgba(0,0,0,0.5))"
   },
   heroTitle: {
-    fontSize: "3em",
-    fontWeight: "normal",
-    margin: "20px 0 10px 0",
-    letterSpacing: "2px"
+    fontSize: "3em", fontWeight: "normal", margin: "20px 0 10px 0", letterSpacing: "2px"
   },
-  heroSubtitle: {
-    fontSize: "1.2em",
-    opacity: 0.8,
-    fontStyle: "italic"
-  },
+  heroSubtitle: { fontSize: "1.2em", opacity: 0.8, fontStyle: "italic" },
 
-  // SLIDING CONTENT LAYER
   contentLayer: {
     position: "relative",
-    zIndex: 10, // Sits ON TOP of the logo
-    marginTop: "85vh", // Starts 85% down the page (so you see the logo first)
-    backgroundColor: "#f4f1ea", // Beige paper color
+    zIndex: 10,
+    marginTop: "85vh",
+    backgroundColor: "#f4f1ea",
     minHeight: "100vh",
-    boxShadow
+    boxShadow: "0 -20px 50px rgba(0,0,0,0.5)",
+    borderTopLeftRadius: "30px", borderTopRightRadius: "30px",
+    paddingBottom: "100px"
+  },
+  contentInner: { maxWidth: "1200px", margin: "0 auto", padding: "40px 20px" },
+  actionBar: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" },
+  addButton: { padding: "10px 20px", background: "#b91c1c", color: "#fff", border: "none", borderRadius: "30px", cursor: "pointer", fontWeight: "bold" },
+  memberCount: { color: "#555", fontStyle: "italic" },
+  treeContainer: {
+    background: "white", borderRadius: "10px", boxShadow: "0 5px 15px rgba(0,0,0,0.05)",
+    padding: "20px", minHeight: "400px", overflow: "auto", border: "1px solid #ddd"
+  },
+  databaseSection: { marginTop: "50px" },
+  sectionTitle: { borderBottom: "2px solid #b91c1c", display: "inline-block", paddingBottom: "5px", marginBottom: "20px", color: "#444" },
+  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "15px" },
+  card: { display: "flex", alignItems: "center", gap: "10px", padding: "10px", background: "white", border: "1px solid #ddd", borderRadius: "8px", cursor: "pointer", textAlign: "left" },
+  cardImgContainer: { width: "40px", height: "40px", borderRadius: "50%", overflow: "hidden", flexShrink: 0, backgroundColor: "#eee" },
+  cardImg: { width: "100%",
