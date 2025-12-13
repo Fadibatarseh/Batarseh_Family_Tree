@@ -83,14 +83,30 @@ export default function FamilyTreeApp() {
   }
 
   async function save() {
-    const personData = { name: form.name, birth: form.birth, death: form.death, img_url: form.img_url, parents: form.parents };
-    if (currentEdit) {
-      await supabase.from('family_members').update(personData).eq('id', currentEdit);
-    } else {
-      await supabase.from('family_members').insert([personData]);
+    // 1. Clean up the data before sending
+    // If the box is empty strings (""), send null instead.
+    const personData = { 
+      name: form.name, 
+      birth: form.birth || null, 
+      death: form.death || null, 
+      img_url: form.img_url || null, 
+      parents: form.parents || [] // Ensure parents is always an array
+    };
+
+    try {
+        if (currentEdit) {
+          const { error } = await supabase.from('family_members').update(personData).eq('id', currentEdit);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase.from('family_members').insert([personData]);
+          if (error) throw error;
+        }
+        await fetchPeople();
+        setModalOpen(false);
+    } catch (error) {
+        alert("Error saving: " + error.message);
+        console.error(error);
     }
-    await fetchPeople();
-    setModalOpen(false);
   }
 
   return (
