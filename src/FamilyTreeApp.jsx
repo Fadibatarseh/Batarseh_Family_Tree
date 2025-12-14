@@ -39,22 +39,27 @@ export default function FamilyTreeApp() {
 
   useEffect(() => { if (!loading) renderTree(); }, [people, loading]);
 
-// UPDATED: renderTree (Aggressive Safety Mode)
+// UPDATED: renderTree (Type-Safe Version)
   async function renderTree() {
     if (!treeRef.current || Object.keys(people).length === 0) return;
     
-    // 1. SAFETY FUNCTIONS
-    // Mermaid hates IDs starting with numbers. We prefix everything with "N_"
-    const safeID = (uuid) => "N_" + uuid.replace(/-/g, "_");
+    // 1. SAFETY FUNCTIONS (Now forces everything to String first)
     
-    // Mermaid hates line breaks and special symbols in text. We strip them.
-    const safeText = (text) => {
-        if (!text) return "";
-        return text.toString()
-            .replace(/[\r\n]+/g, " ") // Turn 'Enter' keys into spaces
-            .replace(/[()"]/g, "")    // Delete parens and quotes entirely
-            .replace(/[']/g, "")      // Delete single quotes
-            .replace(/[#;:>]/g, "")   // Delete other code symbols
+    const safeID = (rawId) => {
+        if (rawId === null || rawId === undefined) return "UNKNOWN";
+        // Force conversion to string to prevent ".replace is not a function" error
+        const strId = String(rawId); 
+        return "N_" + strId.replace(/-/g, "_").replace(/\s/g, "_");
+    };
+    
+    const safeText = (rawText) => {
+        if (rawText === null || rawText === undefined) return "";
+        // Force conversion to string
+        return String(rawText)
+            .replace(/[\r\n]+/g, " ") // Remove Enter keys
+            .replace(/[()"]/g, "")    // Remove brackets/quotes
+            .replace(/[']/g, "")      // Remove single quotes
+            .replace(/[#;:>]/g, "")   // Remove special symbols
             .trim();
     };
 
@@ -67,6 +72,7 @@ export default function FamilyTreeApp() {
 
     // 3. Draw People Nodes
     Object.values(people).forEach(p => {
+      // Run everything through the safety functions
       const id = safeID(p.id);
       const name = safeText(p.name);
       const birth = safeText(p.birth);
@@ -74,23 +80,24 @@ export default function FamilyTreeApp() {
       
       const imgTag = p.img_url ? `<img src='${p.img_url}' width='50' height='50' style='object-fit:cover; margin-bottom:5px;' /><br/>` : "";
       
-      // We use the SAFE ID and SAFE TEXT
       chart += `${id}("${imgTag}<b>${name}</b><br/><span style='font-size:0.8em'>${birth}${death ? ` - ${death}` : ""}</span>"):::mainNode\n`;
     });
 
     // 4. Draw Marriage Knots
     const knots = {}; 
     Object.values(people).forEach(p => {
+      // Check if spouse exists and is valid
       if (p.spouse && people[p.spouse]) {
         // Sort IDs to ensure A-B is same as B-A
-        const coupleKey = [p.id, p.spouse].sort().join("-");
+        const rawCoupleKey = [p.id, p.spouse].sort().join("-");
+        const coupleKey = safeText(rawCoupleKey); // sanitize the key too
         
         if (!knots[coupleKey]) {
            const knotId = `KNOT_${coupleKey.replace(/-/g, '')}`; 
            knots[coupleKey] = knotId;
            
            chart += `${knotId}( ) :::marriageNode\n`;
-           // Use safeID for connections
+           // Ensure we use safeID for the links
            chart += `${safeID(p.id)} --- ${knotId} --- ${safeID(p.spouse)}\n`;
         }
       }
@@ -98,19 +105,21 @@ export default function FamilyTreeApp() {
 
     // 5. Link Children
     Object.values(people).forEach(p => {
-      if (p.parents && p.parents.length > 0) {
+      if (p.parents && Array.isArray(p.parents) && p.parents.length > 0) {
         let linkedToKnot = false;
 
         // Try to link to a marriage knot first (T-Shape)
         if (p.parents.length === 2) {
-            const coupleKey = [...p.parents].sort().join("-");
+            const rawCoupleKey = [...p.parents].sort().join("-");
+            const coupleKey = safeText(rawCoupleKey);
+            
             if (knots[coupleKey]) {
                 chart += `${knots[coupleKey]} --> ${safeID(p.id)}\n`;
                 linkedToKnot = true;
             }
         }
 
-        // Fallback: Link directly to parent (Single parent or unmatched)
+        // Fallback: Link directly to parent
         if (!linkedToKnot) {
             p.parents.forEach(parId => {
                if (people[parId]) {
@@ -120,9 +129,6 @@ export default function FamilyTreeApp() {
         }
       }
     });
-
-    // Debugging: If it fails, you can see the exact string in the console
-    // console.log("Generated Mermaid Chart:", chart);
 
     treeRef.current.innerHTML = `<pre class="mermaid" style="width: 100%; height: 100%;">${chart}</pre>`;
     try { await mermaid.run({ nodes: treeRef.current.querySelectorAll('.mermaid') }); } 
