@@ -36,17 +36,21 @@ export default function FamilyTreeApp() {
 
   useEffect(() => { if (!loading) renderTree(); }, [people, loading]);
 
-  // UPDATED: renderTree with Spouse Lines
+// UPDATED: renderTree with RECTANGULAR nodes
   async function renderTree() {
     if (!treeRef.current || Object.keys(people).length === 0) return;
     let chart = `flowchart TD\n`;
-    chart += `classDef mainNode fill:#fff,stroke:#b91c1c,stroke-width:2px,rx:5,ry:5,color:#000,width:150px;\n`;
+    
+    // --- THE CHANGE IS IN THIS LINE ---
+    // Removed "rx:5,ry:5" to make corners sharp (rectangular) instead of rounded.
+    chart += `classDef mainNode fill:#fff,stroke:#b91c1c,stroke-width:2px,color:#000,width:150px;\n`;
     chart += `linkStyle default stroke:#666,stroke-width:2px;\n`;
 
     // 1. Draw Nodes
     Object.values(people).forEach(p => {
       const safeName = p.name.replace(/"/g, "'");
-      const imgTag = p.img_url ? `<img src='${p.img_url}' width='60' height='60' style='border-radius:50%; object-fit:cover; margin-bottom:5px;' /><br/>` : "";
+      // Made image slightly smaller and square to fit better in a rectangle box
+      const imgTag = p.img_url ? `<img src='${p.img_url}' width='50' height='50' style='object-fit:cover; margin-bottom:5px;' /><br/>` : "";
       chart += `${p.id}("${imgTag}<b>${safeName}</b><br/><span style='font-size:0.8em'>${p.birth}${p.death ? ` - ${p.death}` : ""}</span>"):::mainNode\n`;
     });
 
