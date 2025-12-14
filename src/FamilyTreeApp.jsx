@@ -39,56 +39,50 @@ export default function FamilyTreeApp() {
 
   useEffect(() => { if (!loading) renderTree(); }, [people, loading]);
 
-// UPDATED: renderTree (Strict Mode - Only Letters/Numbers allowed in IDs)
+// UPDATED: renderTree (With "Side-by-Side" Alignment Fix)
   async function renderTree() {
     if (!treeRef.current || Object.keys(people).length === 0) return;
 
-    // 1. STRICT SAFETY FUNCTIONS
-    // Only allow A-Z and 0-9. All other symbols (-, :, ., space) become underscores.
+    // 1. HELPER: Strict ID Cleaning
     const safeID = (rawId) => {
         if (!rawId) return "UNKNOWN_ID";
         return "NODE_" + String(rawId).replace(/[^a-zA-Z0-9]/g, "_");
     };
-    
-    // Remove all special characters from names/dates that could break the code
+
     const safeText = (rawText) => {
         if (!rawText) return "";
-        return String(rawText)
-            .replace(/[\r\n]+/g, " ") 
-            .replace(/[#<>;:()"']/g, "") // Strip ALL code syntax characters
-            .trim();
+        return String(rawText).replace(/[#<>;:()"']/g, "").trim();
     };
 
     let chart = `flowchart TD\n`;
     
-    // 2. Define Styles
-    // We use a Diamond < > for the marriage knot because it's very stable in Mermaid
+    // 2. STYLES
     chart += `classDef mainNode fill:#fff,stroke:#b91c1c,stroke-width:2px,color:#000,width:150px;\n`;
+    // We use a Diamond < > for the marriage knot
     chart += `classDef marriageNode width:0px,height:0px,padding:0px,stroke:none,fill:#000;\n`;
     chart += `linkStyle default stroke:#666,stroke-width:2px;\n`;
 
-    // 3. Draw People Nodes
+    // 3. DRAW NODES
     Object.values(people).forEach(p => {
       const id = safeID(p.id);
       const name = safeText(p.name);
       const birth = safeText(p.birth);
       const death = safeText(p.death);
-      
       const imgTag = p.img_url ? `<img src='${p.img_url}' width='50' height='50' style='object-fit:cover; margin-bottom:5px;' /><br/>` : "";
       
       chart += `${id}("${imgTag}<b>${name}</b><br/><span style='font-size:0.8em'>${birth}${death ? ` - ${death}` : ""}</span>"):::mainNode\n`;
     });
 
-    // 4. Draw Marriage Knots
-    const knots = {}; 
+    // 4. DRAW COUPLES (With Alignment Fix)
+    const knots = {};
+    const processedSpouses = new Set(); // To prevent crashes if someone has 2 spouses
+
     Object.values(people).forEach(p => {
-      // Logic: Only draw knot if spouse exists AND is in the list
       if (p.spouse && people[p.spouse]) {
-        // Create a Key: "NODE_123_NODE_456"
         const p1 = safeID(p.id);
         const p2 = safeID(p.spouse);
         
-        // Sort them so A-B is the same as B-A
+        // Create unique key for the couple
         const pair = [p1, p2].sort(); 
         const coupleKey = pair.join("_X_"); 
 
@@ -96,21 +90,38 @@ export default function FamilyTreeApp() {
            const knotId = `KNOT_${coupleKey}`; 
            knots[coupleKey] = knotId;
            
-           // Draw the invisible knot (using diamond syntax {})
-           chart += `${knotId}{ }:::marriageNode\n`;
+           // ALIGNMENT FIX: Wrap the couple in a Subgraph
+           // This forces "Left-to-Right" layout for just these two people
+           // We only do this if they haven't been "grouped" already to avoid conflicts
+           const canGroup = !processedSpouses.has(p1) && !processedSpouses.has(p2);
            
-           // Link them: Person1 --- Knot --- Person2
-           chart += `${p1} --- ${knotId} --- ${p2}\n`;
+           if (canGroup) {
+               chart += `subgraph SG_${coupleKey} [ ]\n`;
+               chart += `direction LR\n`; // Force Side-by-Side
+               chart += `style SG_${coupleKey} fill:none,stroke:none\n`; // Invisible box
+               chart += `${p1} --- ${knotId} --- ${p2}\n`;
+               chart += `end\n`; // End Subgraph
+               
+               // Mark them as grouped
+               processedSpouses.add(p1);
+               processedSpouses.add(p2);
+           } else {
+               // Fallback for second spouses (standard link)
+               chart += `${p1} --- ${knotId} --- ${p2}\n`;
+           }
+           
+           // Apply style to the knot
+           chart += `${knotId}{ }:::marriageNode\n`;
         }
       }
     });
 
-    // 5. Link Children
+    // 5. LINK CHILDREN
     Object.values(people).forEach(p => {
       if (p.parents && Array.isArray(p.parents) && p.parents.length > 0) {
         let linkedToKnot = false;
 
-        // Attempt to link to Parents' Marriage Knot
+        // Try to link to Parents' Marriage Knot
         if (p.parents.length === 2) {
             const par1 = safeID(p.parents[0]);
             const par2 = safeID(p.parents[1]);
@@ -122,7 +133,7 @@ export default function FamilyTreeApp() {
             }
         }
 
-        // Fallback: Link directly to parent (Single parent or unmarried)
+        // Fallback: Link directly to single parent
         if (!linkedToKnot) {
             p.parents.forEach(parId => {
                if (people[parId]) {
@@ -133,20 +144,11 @@ export default function FamilyTreeApp() {
       }
     });
 
-    // SAFETY CHECK: If the chart is empty (no people), don't run it
-    if (Object.keys(people).length === 0) return;
-
     treeRef.current.innerHTML = `<pre class="mermaid" style="width: 100%; height: 100%;">${chart}</pre>`;
-    
-    // Run Mermaid
-    try { 
-        await mermaid.run({ nodes: treeRef.current.querySelectorAll('.mermaid') }); 
-    } catch (error) { 
-        console.error("CRITICAL MERMAID ERROR. Chart Data:", chart); 
-        console.error(error);
-    }
+    try { await mermaid.run({ nodes: treeRef.current.querySelectorAll('.mermaid') }); } 
+    catch (error) { console.error("Render Error:", error); }
   }
-
+  
   function openEdit(id) {
     const p = people[id];
     setCurrentEdit(id);
