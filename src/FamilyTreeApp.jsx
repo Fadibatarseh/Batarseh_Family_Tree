@@ -112,6 +112,21 @@ export default function FamilyTreeApp() {
         if (knots[key]) {
           chart += `${knots[key]} --> ${safeID(p.id)}\n`;
           return;
+          // Add this inside your renderTree function, inside the first loop:
+Object.values(people).forEach((p) => {
+    // ... existing code ...
+    chart += `${safeID(p.id)}("..."):::main\n`;
+    
+    // NEW: Add Click Event
+    chart += `click ${safeID(p.id)} call window.onNodeClick("${p.id}")\n`; 
+});
+
+// Add this useEffect to your component to handle the click:
+useEffect(() => {
+    window.onNodeClick = (id) => {
+        openEdit(id);
+    };
+}, [people]); // Re-bind when people change
         }
       }
       p.parents?.forEach((pid) => {
