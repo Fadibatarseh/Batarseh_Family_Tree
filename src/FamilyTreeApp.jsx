@@ -159,7 +159,7 @@ async function renderTree() {
              if (people[p1] && people[p2]) {
                  const subGraphId = `SG_${p1}_${p2}`.replace(/[^a-zA-Z0-9]/g, "_");
                  
-                 // FIX 1: Use HTML Entity code for space (&#160;) to hide title safely
+                 // FIX: Use HTML Entity for space ("&#160;") to hide title safely
                  chart += `subgraph ${subGraphId} ["&#160;"]\n`; 
                  
                  chart += `direction LR\n`; 
@@ -199,7 +199,7 @@ async function renderTree() {
 
                 const subGraphId = `SG_COUPLE_${pairKey}`.replace(/[^a-zA-Z0-9]/g, "_");
                 
-                // FIX 2: Use HTML Entity code for space (&#160;) here as well
+                // FIX: Use HTML Entity for space ("&#160;") here as well
                 chart += `subgraph ${subGraphId} ["&#160;"]\n`; 
 
                 chart += `direction LR\n`;
