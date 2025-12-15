@@ -34,7 +34,7 @@ export default function FamilyTreeApp() {
   /* ------------------------- REFS ------------------------- */
   const treeRef = useRef(null);
   const viewportRef = useRef(null);
-  
+   
   // Custom Pan/Zoom State
   const panZoom = useRef(
     JSON.parse(localStorage.getItem("tree_view")) || { x: 0, y: 0, scale: 1 }
@@ -43,16 +43,15 @@ export default function FamilyTreeApp() {
   const lastMouse = useRef({ x: 0, y: 0 });
 
   /* ------------------------- INITIALIZATION ------------------------- */
-/* ------------------------- INITIALIZATION ------------------------- */
   useEffect(() => {
     mermaid.initialize({
       startOnLoad: false,
       securityLevel: "loose",
       theme: "base",
       flowchart: { 
-          curve: "stepAfter", // <--- CRITICAL: Forces 90-degree lines (no loopy curves)
-          nodeSpacing: 50,    // <--- Keeps family members closer together
-          rankSpacing: 80,    // <--- Reduces vertical gap between generations
+          curve: "stepAfter",
+          nodeSpacing: 50,    
+          rankSpacing: 80,    
       }, 
     });
   }, []);
@@ -63,6 +62,35 @@ export default function FamilyTreeApp() {
       openEdit(id);
     };
   }, [people]);
+
+  /* ------------------------- EVENT LISTENERS FIX ------------------------- */
+  // We attach these manually to allow { passive: false }
+  useEffect(() => {
+    const node = viewportRef.current;
+    if (!node) return;
+
+    // Prevent default scrolling behavior
+    const preventDefaultOpts = { passive: false };
+
+    const handleWheel = (e) => onWheel(e);
+    const handleTouchStart = (e) => startDrag(e);
+    const handleTouchMove = (e) => onDrag(e);
+    const handleTouchEnd = () => stopDrag();
+
+    // Attach Native Listeners
+    node.addEventListener("wheel", handleWheel, preventDefaultOpts);
+    node.addEventListener("touchstart", handleTouchStart, preventDefaultOpts);
+    node.addEventListener("touchmove", handleTouchMove, preventDefaultOpts);
+    node.addEventListener("touchend", handleTouchEnd);
+
+    // Cleanup
+    return () => {
+      node.removeEventListener("wheel", handleWheel);
+      node.removeEventListener("touchstart", handleTouchStart);
+      node.removeEventListener("touchmove", handleTouchMove);
+      node.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, []); // Run once on mount
 
   /* ------------------------- LOAD DATA ------------------------- */
   useEffect(() => {
@@ -85,7 +113,7 @@ export default function FamilyTreeApp() {
     if (!loading) renderTree();
   }, [people, loading]);
 
-async function renderTree() {
+ async function renderTree() {
     if (!treeRef.current) return;
 
     let chart = "flowchart TD\n";
@@ -93,7 +121,7 @@ async function renderTree() {
     // 1. STYLES
     chart += "classDef main fill:#fff,stroke:#b91c1c,stroke-width:2px,cursor:pointer,rx:5,ry:5;\n";
     chart += "classDef familyNode width:0px,height:0px,padding:0px,stroke:none,fill:#000;\n";
-    chart += "linkStyle default stroke:#888,stroke-width:2px,fill:none;\n";
+    chart += "linkStyle default stroke:#888,stroke-width:2px,fill:none;\n"; 
 
     // 2. DRAW PEOPLE
     Object.values(people).forEach((p) => {
@@ -129,18 +157,15 @@ async function renderTree() {
         chart += `${fam.id}[ ]:::familyNode\n`; 
 
         // 2. FORCE PROXIMITY (The Subgraph Fix)
-        // We wrap the parents in a subgraph so they stay on the same level
         if (fam.parents.length === 2) {
              const p1 = fam.parents[0];
              const p2 = fam.parents[1];
              if (people[p1] && people[p2]) {
-                 // Create a unique ID for the subgraph box
                  const subGraphId = `SG_${p1}_${p2}`.replace(/[^a-zA-Z0-9]/g, "_");
-                 
                  chart += `subgraph ${subGraphId}\n`;
-                 chart += `direction LR\n`; // Forces them side-by-side inside the box
-                 chart += `style ${subGraphId} fill:none,stroke:none\n`; // Make the box invisible
-                 chart += `${safeID(p1)} ~~~ ${safeID(p2)}\n`; // The ghost link
+                 chart += `direction LR\n`; 
+                 chart += `style ${subGraphId} fill:none,stroke:none\n`; 
+                 chart += `${safeID(p1)} ~~~ ${safeID(p2)}\n`; 
                  chart += `end\n`;
              }
         }
@@ -157,7 +182,6 @@ async function renderTree() {
             chart += `${fam.id} --> ${safeID(childId)}\n`;
         });
         
-        // Track that we processed this couple
         if (fam.parents.length === 2) {
             const pairKey = [...fam.parents].sort().join("_X_");
             processedSpouses.add(pairKey);
@@ -171,22 +195,16 @@ async function renderTree() {
             
             if (!processedSpouses.has(pairKey)) {
                 const famId = `FAM_COUPLE_${pairKey}`;
-                
-                // Invisible Hub
                 chart += `${famId}[ ]:::familyNode\n`;
 
-                // --- THE FIX: WRAP IN SUBGRAPH ---
                 const subGraphId = `SG_COUPLE_${pairKey}`.replace(/[^a-zA-Z0-9]/g, "_");
                 chart += `subgraph ${subGraphId}\n`;
                 chart += `direction LR\n`;
                 chart += `style ${subGraphId} fill:none,stroke:none\n`;
-                chart += `${safeID(p.id)} ~~~ ${safeID(p.spouse)}\n`; // Ghost Link
+                chart += `${safeID(p.id)} ~~~ ${safeID(p.spouse)}\n`; 
                 chart += `end\n`;
-                // ----------------------------------
                 
-                // Visible Connection through Hub
                 chart += `${safeID(p.id)} --- ${famId} --- ${safeID(p.spouse)}\n`;
-                
                 processedSpouses.add(pairKey);
             }
         }
@@ -200,7 +218,7 @@ async function renderTree() {
     } catch (e) {
         console.error("Mermaid Render Error", e);
     }
-}
+  }
 
   /* ------------------------- PAN / ZOOM LOGIC ------------------------- */
   function applyTransform() {
@@ -213,7 +231,7 @@ async function renderTree() {
   }
 
   function onWheel(e) {
-    e.preventDefault();
+    if (e.cancelable) e.preventDefault(); // Check if cancelable to avoid errors
     const zoomSpeed = 0.001;
     const newScale = Math.min(3, Math.max(0.2, panZoom.current.scale - e.deltaY * zoomSpeed));
     panZoom.current.scale = newScale;
@@ -229,7 +247,7 @@ async function renderTree() {
 
   function onDrag(e) {
     if (!isDragging.current) return;
-    if(e.touches) e.preventDefault(); 
+    if(e.touches && e.cancelable) e.preventDefault(); // Check if cancelable
 
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -302,7 +320,7 @@ async function renderTree() {
     return data.publicUrl;
   }
 
- async function save() {
+  async function save() {
     try {
       let savedId = currentEdit;
       
@@ -314,7 +332,6 @@ async function renderTree() {
         spouse: form.spouse || null,
       };
 
-      // 1. UPDATE/INSERT THE MAIN PERSON
       if (currentEdit) {
         await supabase.from("family_members").update(personData).eq("id", currentEdit);
       } else {
@@ -323,26 +340,17 @@ async function renderTree() {
         savedId = data[0].id;
       }
 
-      // 2. HANDLE PHOTO UPLOAD
       if (imageFile && savedId) {
         const imageUrl = await uploadImage(imageFile, savedId);
         await supabase.from("family_members").update({ img_url: imageUrl }).eq("id", savedId);
       }
 
-      // 3. HANDLE BIDIRECTIONAL SPOUSE (The Missing Link)
-      // If I listed someone as my spouse, I must update THEIR record to list ME as their spouse.
+      // --- BIDIRECTIONAL SPOUSE UPDATE (The Fix) ---
       if (form.spouse) {
-          // Update the spouse to point back to me
-          await supabase
-            .from("family_members")
-            .update({ spouse: savedId })
-            .eq("id", form.spouse);
-          
-          // (Optional Cleanup: If the spouse was previously married to someone else, 
-          // you might want to handle that, but this covers 99% of cases)
+          await supabase.from("family_members").update({ spouse: savedId }).eq("id", form.spouse);
       }
+      // ----------------------------------------------
 
-      // 4. HANDLE PARENT/CHILD RELATIONSHIPS
       const allPeople = Object.values(people).filter(p => p.id !== savedId);
       
       for (const child of allPeople) {
@@ -351,16 +359,14 @@ async function renderTree() {
         const hasParent = currentParents.includes(savedId);
 
         if (isSelected && !hasParent) {
-          // Add me as parent
           await supabase.from("family_members").update({ parents: [...currentParents, savedId] }).eq("id", child.id);
         } else if (!isSelected && hasParent) {
-          // Remove me as parent
           await supabase.from("family_members").update({ parents: currentParents.filter(pid => pid !== savedId) }).eq("id", child.id);
         }
       }
 
       setModalOpen(false);
-      fetchPeople(); // Refresh data
+      fetchPeople();
     } catch (error) {
       alert("Save failed: " + error.message);
     }
@@ -416,14 +422,12 @@ async function renderTree() {
       {/* TREE CANVAS */}
       <div
         ref={viewportRef}
-        onWheel={onWheel}
+        // NOTE: onWheel and onTouch events are now handled in the useEffect above!
+        // We only keep mouse events here because they don't cause the "passive" error.
         onMouseDown={startDrag}
         onMouseMove={onDrag}
         onMouseUp={stopDrag}
-        onMouseLeave={stopDrag}
-        onTouchStart={startDrag} 
-        onTouchMove={onDrag}     
-        onTouchEnd={stopDrag}    
+        onMouseLeave={stopDrag}   
         style={styles.viewport}
       >
         <div ref={treeRef} style={{ transformOrigin: "0 0" }} />
