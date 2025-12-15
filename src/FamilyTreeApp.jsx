@@ -294,7 +294,7 @@ async function uploadImage(file, personId) {
         <div ref={treeRef} />
       </div>
 
-      {<label style={styles.label}>Upload Photo</label>
+      <label style={styles.label}>Upload Photo</label>
 <input
   type="file"
   accept="image/*"
