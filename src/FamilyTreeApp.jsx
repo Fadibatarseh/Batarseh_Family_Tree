@@ -3,232 +3,240 @@ import mermaid from "mermaid";
 import { supabase } from "./supabaseClient";
 import logo from "./logo.png";
 
-/* ===========================
-   CONSTANTS
-=========================== */
-const STORAGE_KEY = "familyTreeViewport";
+/* ------------------------- UTILITIES ------------------------- */
+const safeID = (id) => "NODE_" + String(id).replace(/[^a-zA-Z0-9]/g, "_");
+const safeText = (t) => (t ? String(t).replace(/[#<>;:()"']/g, "") : "");
 
-/* ===========================
-   COMPONENT
-=========================== */
+/* ------------------------- COMPONENT ------------------------- */
 export default function FamilyTreeApp() {
+  /* ------------------------- DATA ------------------------- */
   const [people, setPeople] = useState({});
   const [loading, setLoading] = useState(true);
+
+  /* ------------------------- MODAL ------------------------- */
+  const [modalOpen, setModalOpen] = useState(false);
   const [currentEdit, setCurrentEdit] = useState(null);
+  const [activeTab, setActiveTab] = useState("parents");
 
-  /* ---------- CANVAS STATE ---------- */
-  const treeViewportRef = useRef(null);
-  const treeCanvasRef = useRef(null);
-
-  const viewRef = useRef({
-    x: 0,
-    y: 0,
-    scale: 1,
-    dragging: false,
-    startX: 0,
-    startY: 0
+  const [form, setForm] = useState({
+    name: "",
+    birth: "",
+    death: "",
+    img_url: "",
+    parents: [],
+    spouse: "",
   });
 
-  /* ---------- MERMAID INIT ---------- */
+  const [selectedChildren, setSelectedChildren] = useState([]);
+
+  /* ------------------------- REFS ------------------------- */
+  const treeRef = useRef(null);
+  const viewportRef = useRef(null);
+
+  /* ------------------------- PAN / ZOOM ------------------------- */
+  const panZoom = useRef(
+    JSON.parse(localStorage.getItem("tree_view")) || {
+      x: 0,
+      y: 0,
+      scale: 1,
+    }
+  );
+
+  /* ------------------------- MERMAID INIT ------------------------- */
   useEffect(() => {
     mermaid.initialize({
       startOnLoad: false,
       securityLevel: "loose",
       theme: "base",
-      flowchart: {
-        nodeSpacing: 60,
-        rankSpacing: 100
-      },
-      themeVariables: {
-        primaryColor: "#ffffff",
-        primaryBorderColor: "#b91c1c",
-        primaryTextColor: "#000",
-        lineColor: "#555"
-      }
+      flowchart: { curve: "stepAfter", nodeSpacing: 80, rankSpacing: 120 },
     });
   }, []);
 
-  /* ---------- LOAD VIEWPORT ---------- */
+  /* ------------------------- LOAD DATA ------------------------- */
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) Object.assign(viewRef.current, JSON.parse(saved));
+    fetchPeople();
   }, []);
-
-  /* ---------- SAVE VIEWPORT ---------- */
-  function persistView() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(viewRef.current));
-  }
-
-  /* ---------- DATA ---------- */
-  useEffect(() => { fetchPeople(); }, []);
 
   async function fetchPeople() {
     setLoading(true);
-    const { data } = await supabase.from("family_members").select("*");
-    const obj = {};
-    data?.forEach(p => (obj[p.id] = p));
-    setPeople(obj);
+    const { data, error } = await supabase
+      .from("family_members")
+      .select("*");
+    if (!error) {
+      const obj = {};
+      data.forEach((p) => (obj[p.id] = p));
+      setPeople(obj);
+    }
     setLoading(false);
   }
 
-  /* ---------- RENDER TREE ---------- */
+  /* ------------------------- RENDER TREE ------------------------- */
   useEffect(() => {
     if (!loading) renderTree();
   }, [people, loading]);
 
   async function renderTree() {
-    if (!treeCanvasRef.current || !Object.keys(people).length) return;
-
-    const safeID = id => "N_" + String(id).replace(/\W/g, "_");
-    const safeText = t => t ? String(t).replace(/[<>"]/g, "") : "";
+    if (!treeRef.current) return;
 
     let chart = "flowchart TD\n";
-    chart += "classDef person fill:#fff,stroke:#b91c1c,stroke-width:2px;\n";
-    chart += "classDef marriage fill:none,stroke:none,width:1px,height:1px;\n";
+    chart += "classDef main fill:#fff,stroke:#b91c1c,stroke-width:2px;\n";
+    chart += "classDef knot width:0,height:0,fill:none,stroke:none;\n";
 
-    /* ---- PERSON NODES ---- */
-    Object.values(people).forEach(p => {
-      chart += `${safeID(p.id)}("${safeText(p.name)}<br/><small>${p.birth || ""}${p.death ? " - " + p.death : ""}</small>"):::person\n`;
+    const knots = {};
+
+    Object.values(people).forEach((p) => {
+      chart += `${safeID(p.id)}("${safeText(p.name)}<br/>${safeText(
+        p.birth
+      )}${p.death ? " - " + safeText(p.death) : ""}"):::main\n`;
     });
 
-    /* ---- MARRIAGES ---- */
-    const marriages = {};
-    Object.values(people).forEach(p => {
+    Object.values(people).forEach((p) => {
       if (p.spouse && people[p.spouse]) {
-        const a = safeID(p.id);
-        const b = safeID(p.spouse);
-        const key = [a, b].sort().join("_");
-        if (!marriages[key]) {
-          marriages[key] = "M_" + key;
-          chart += `subgraph SG_${key} [ ]\n`;
-          chart += "direction LR\n";
-          chart += `${a} --- ${marriages[key]} --- ${b}\n`;
-          chart += "end\n";
-          chart += `${marriages[key]}{ }:::marriage\n`;
+        const pair = [p.id, p.spouse].sort();
+        const key = pair.join("_");
+        if (!knots[key]) {
+          knots[key] = `KNOT_${key}`;
+          chart += `${safeID(pair[0])} --- ${knots[key]} --- ${safeID(
+            pair[1]
+          )}\n`;
+          chart += `${knots[key]}{ }:::knot\n`;
         }
       }
     });
 
-    /* ---- CHILDREN ---- */
-    Object.values(people).forEach(p => {
-      if (Array.isArray(p.parents)) {
-        if (p.parents.length === 2) {
-          const key = [safeID(p.parents[0]), safeID(p.parents[1])].sort().join("_");
-          if (marriages[key]) {
-            chart += `${marriages[key]} --> ${safeID(p.id)}\n`;
-            return;
-          }
+    Object.values(people).forEach((p) => {
+      if (p.parents?.length === 2) {
+        const key = [...p.parents].sort().join("_");
+        if (knots[key]) {
+          chart += `${knots[key]} --> ${safeID(p.id)}\n`;
+          return;
         }
-        p.parents.forEach(par => {
-          if (people[par]) chart += `${safeID(par)} --> ${safeID(p.id)}\n`;
-        });
       }
+      p.parents?.forEach((pid) => {
+        if (people[pid]) chart += `${safeID(pid)} --> ${safeID(p.id)}\n`;
+      });
     });
 
-    treeCanvasRef.current.innerHTML = `<pre class="mermaid">${chart}</pre>`;
-    await mermaid.run({ nodes: treeCanvasRef.current.querySelectorAll(".mermaid") });
+    treeRef.current.innerHTML = `<pre class="mermaid">${chart}</pre>`;
+    await mermaid.run({ nodes: treeRef.current.querySelectorAll(".mermaid") });
     applyTransform();
   }
 
-  /* ---------- TRANSFORM ---------- */
+  /* ------------------------- PAN / ZOOM HANDLERS ------------------------- */
   function applyTransform() {
-    const { x, y, scale } = viewRef.current;
-    treeCanvasRef.current.style.transform =
-      `translate(${x}px, ${y}px) scale(${scale})`;
-    persistView();
+    const el = treeRef.current;
+    if (!el) return;
+    const { x, y, scale } = panZoom.current;
+    el.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+    localStorage.setItem("tree_view", JSON.stringify(panZoom.current));
   }
 
-  /* ---------- PAN ---------- */
-  function panStart(e) {
-    viewRef.current.dragging = true;
-    viewRef.current.startX = e.clientX - viewRef.current.x;
-    viewRef.current.startY = e.clientY - viewRef.current.y;
-  }
-
-  function panMove(e) {
-    if (!viewRef.current.dragging) return;
-    viewRef.current.x = e.clientX - viewRef.current.startX;
-    viewRef.current.y = e.clientY - viewRef.current.startY;
-    applyTransform();
-  }
-
-  function panEnd() {
-    viewRef.current.dragging = false;
-  }
-
-  /* ---------- ZOOM ---------- */
   function onWheel(e) {
     e.preventDefault();
-    const delta = -e.deltaY * 0.001;
-    viewRef.current.scale = Math.min(2, Math.max(0.3, viewRef.current.scale + delta));
+    panZoom.current.scale = Math.min(
+      2,
+      Math.max(0.3, panZoom.current.scale - e.deltaY * 0.001)
+    );
     applyTransform();
   }
 
-  /* ---------- AUTO CENTER ---------- */
-  function centerOnPerson(id) {
-    const node = document.getElementById("N_" + id);
-    if (!node) return;
-    const box = node.getBoundingClientRect();
-    const vp = treeViewportRef.current.getBoundingClientRect();
-    viewRef.current.x += vp.width / 2 - box.left - box.width / 2;
-    viewRef.current.y += vp.height / 2 - box.top - box.height / 2;
+  function onDrag(e) {
+    if (!e.buttons) return;
+    panZoom.current.x += e.movementX;
+    panZoom.current.y += e.movementY;
     applyTransform();
   }
 
-  /* ===========================
-     RENDER
-=========================== */
+  /* ------------------------- ADD / EDIT ------------------------- */
+  function openAdd() {
+    setCurrentEdit(null);
+    setForm({
+      name: "",
+      birth: "",
+      death: "",
+      img_url: "",
+      parents: [],
+      spouse: "",
+    });
+    setSelectedChildren([]);
+    setModalOpen(true);
+  }
+
+  function openEdit(id) {
+    const p = people[id];
+    setCurrentEdit(id);
+    setForm({ ...p, parents: p.parents || [] });
+    setSelectedChildren(
+      Object.values(people)
+        .filter((c) => c.parents?.includes(id))
+        .map((c) => c.id)
+    );
+    setModalOpen(true);
+  }
+
+  async function save() {
+    let id = currentEdit;
+    if (currentEdit) {
+      await supabase.from("family_members").update(form).eq("id", id);
+    } else {
+      const { data } = await supabase
+        .from("family_members")
+        .insert([form])
+        .select();
+      id = data[0].id;
+    }
+
+    for (const p of Object.values(people)) {
+      const parents = p.parents || [];
+      const has = parents.includes(id);
+      const should = selectedChildren.includes(p.id);
+      if (has !== should) {
+        await supabase
+          .from("family_members")
+          .update({
+            parents: should
+              ? [...parents, id]
+              : parents.filter((x) => x !== id),
+          })
+          .eq("id", p.id);
+      }
+    }
+
+    setModalOpen(false);
+    fetchPeople();
+  }
+
+  /* ------------------------- UI ------------------------- */
   return (
-    <div style={styles.page}>
-      <img src={logo} alt="Logo" style={styles.logo} />
+    <div>
+      <img src={logo} style={{ maxWidth: 200 }} />
+      <button onClick={openAdd}>+ Add Member</button>
 
       <div
-        ref={treeViewportRef}
-        style={styles.viewport}
-        onMouseDown={panStart}
-        onMouseMove={panMove}
-        onMouseUp={panEnd}
-        onMouseLeave={panEnd}
+        ref={viewportRef}
         onWheel={onWheel}
+        onMouseMove={onDrag}
+        style={{
+          height: "80vh",
+          overflow: "hidden",
+          cursor: "grab",
+          background: "#fafafa",
+        }}
       >
-        {loading ? <p>Loading…</p> : (
-          <div ref={treeCanvasRef} style={styles.canvas} />
-        )}
+        <div ref={treeRef} />
       </div>
+
+      {modalOpen && (
+        <div>
+          <input
+            placeholder="Name"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+          />
+          <button onClick={save}>Save</button>
+          <button onClick={() => setModalOpen(false)}>Cancel</button>
+        </div>
+      )}
     </div>
   );
 }
-
-/* ===========================
-   STYLES
-=========================== */
-const styles = {
-  page: {
-    background: "#f4f1ea",
-    minHeight: "100vh",
-    padding: "20px",
-    fontFamily: "Georgia, serif"
-  },
-  logo: {
-    display: "block",
-    maxWidth: "300px",
-    margin: "0 auto 20px"
-  },
-  viewport: {
-    position: "relative",
-    height: "85vh",
-    overflow: "hidden",
-    background: "#fff",
-    border: "1px solid #ddd",
-    borderRadius: "10px",
-    cursor: "grab"
-  },
-  canvas: {
-    position: "absolute",
-    top: "50%",
-    left: "50%",
-    transformOrigin: "0 0",
-    minWidth: "2500px",
-    minHeight: "2500px"
-  }
-};
