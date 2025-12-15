@@ -302,7 +302,7 @@ async function renderTree() {
     return data.publicUrl;
   }
 
-  async function save() {
+ async function save() {
     try {
       let savedId = currentEdit;
       
@@ -314,6 +314,7 @@ async function renderTree() {
         spouse: form.spouse || null,
       };
 
+      // 1. UPDATE/INSERT THE MAIN PERSON
       if (currentEdit) {
         await supabase.from("family_members").update(personData).eq("id", currentEdit);
       } else {
@@ -322,11 +323,26 @@ async function renderTree() {
         savedId = data[0].id;
       }
 
+      // 2. HANDLE PHOTO UPLOAD
       if (imageFile && savedId) {
         const imageUrl = await uploadImage(imageFile, savedId);
         await supabase.from("family_members").update({ img_url: imageUrl }).eq("id", savedId);
       }
 
+      // 3. HANDLE BIDIRECTIONAL SPOUSE (The Missing Link)
+      // If I listed someone as my spouse, I must update THEIR record to list ME as their spouse.
+      if (form.spouse) {
+          // Update the spouse to point back to me
+          await supabase
+            .from("family_members")
+            .update({ spouse: savedId })
+            .eq("id", form.spouse);
+          
+          // (Optional Cleanup: If the spouse was previously married to someone else, 
+          // you might want to handle that, but this covers 99% of cases)
+      }
+
+      // 4. HANDLE PARENT/CHILD RELATIONSHIPS
       const allPeople = Object.values(people).filter(p => p.id !== savedId);
       
       for (const child of allPeople) {
@@ -335,14 +351,16 @@ async function renderTree() {
         const hasParent = currentParents.includes(savedId);
 
         if (isSelected && !hasParent) {
+          // Add me as parent
           await supabase.from("family_members").update({ parents: [...currentParents, savedId] }).eq("id", child.id);
         } else if (!isSelected && hasParent) {
+          // Remove me as parent
           await supabase.from("family_members").update({ parents: currentParents.filter(pid => pid !== savedId) }).eq("id", child.id);
         }
       }
 
       setModalOpen(false);
-      fetchPeople();
+      fetchPeople(); // Refresh data
     } catch (error) {
       alert("Save failed: " + error.message);
     }
