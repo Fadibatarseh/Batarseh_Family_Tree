@@ -161,6 +161,7 @@ export default function FamilyTreeApp() {
       spouse: "",
     });
     setSelectedChildren([]);
+    setImageFile(null);
     setModalOpen(true);
   }
 
@@ -173,6 +174,7 @@ export default function FamilyTreeApp() {
         .filter((c) => c.parents?.includes(id))
         .map((c) => c.id)
     );
+    setImageFile(null);
     setModalOpen(true);
   }
   
@@ -198,33 +200,75 @@ async function uploadImage(file, personId) {
   return data.publicUrl;
 }
 
-  async function save() {
-    let id = currentEdit;
+ async function save() {
+  try {
+    let savedId = currentEdit;
+
+    // A. CREATE OR UPDATE PERSON (WITHOUT IMAGE FIRST)
     if (currentEdit) {
-      await supabase.from("family_members").update(form).eq("id", id);
-    } else {
-      const { data } = await supabase
+      await supabase
         .from("family_members")
-        .insert([form])
+        .update({
+          name: form.name,
+          birth: form.birth || null,
+          death: form.death || null,
+          parents: form.parents || [],
+          spouse: form.spouse || null,
+        })
+        .eq("id", currentEdit);
+    } else {
+      const { data, error } = await supabase
+        .from("family_members")
+        .insert([
+          {
+            name: form.name,
+            birth: form.birth || null,
+            death: form.death || null,
+            parents: form.parents || [],
+            spouse: form.spouse || null,
+          },
+        ])
         .select();
-      id = data[0].id;
+
+      if (error) throw error;
+      savedId = data[0].id;
     }
 
-    for (const p of Object.values(people)) {
-      const parents = p.parents || [];
-      const has = parents.includes(id);
-      const should = selectedChildren.includes(p.id);
-      if (has !== should) {
+    // B. UPLOAD IMAGE (IF PROVIDED)
+    if (imageFile && savedId) {
+      const imageUrl = await uploadImage(imageFile, savedId);
+
+      await supabase
+        .from("family_members")
+        .update({ img_url: imageUrl })
+        .eq("id", savedId);
+    }
+
+    // C. UPDATE CHILD LINKS (REVERSE RELATIONSHIP)
+    for (const child of Object.values(people)) {
+      const parents = child.parents || [];
+      const hasParent = parents.includes(savedId);
+      const shouldHave = selectedChildren.includes(child.id);
+
+      if (hasParent !== shouldHave) {
+        const newParents = shouldHave
+          ? [...parents, savedId]
+          : parents.filter((p) => p !== savedId);
+
         await supabase
           .from("family_members")
-          .update({
-            parents: should
-              ? [...parents, id]
-              : parents.filter((x) => x !== id),
-          })
-          .eq("id", p.id);
+          .update({ parents: newParents })
+          .eq("id", child.id);
       }
     }
+
+    setModalOpen(false);
+    fetchPeople();
+  } catch (error) {
+    alert("Save failed: " + error.message);
+  }
+}
+
 
     setModalOpen(false);
     fetchPeople();
@@ -250,13 +294,27 @@ async function uploadImage(file, personId) {
         <div ref={treeRef} />
       </div>
 
-      {modalOpen && (
-        <div>
-          <input
-            placeholder="Name"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-          />
+      {<label style={styles.label}>Upload Photo</label>
+<input
+  type="file"
+  accept="image/*"
+  onChange={(e) => setImageFile(e.target.files[0])}
+/>
+
+{form.img_url && (
+  <img
+    src={form.img_url}
+    alt="Preview"
+    style={{
+      width: 80,
+      height: 80,
+      objectFit: "cover",
+      borderRadius: "8px",
+      marginTop: "10px",
+    }}
+  />
+)}
+
           <button onClick={save}>Save</button>
           <button onClick={() => setModalOpen(false)}>Cancel</button>
         </div>
