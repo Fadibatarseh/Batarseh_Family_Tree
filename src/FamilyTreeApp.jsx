@@ -104,173 +104,132 @@ export default function FamilyTreeApp() {
     }
   }, [people]);
   /* ------------------------- RENDER TREE ------------------------- */
-async function renderTree() {
+function renderTree() {
   if (!treeRef.current) return;
 
-  treeRef.current.innerHTML = "";
+  treeRef.current.innerHTML = ""; // Clear previous render
 
-  const width = 5000;
+  const width = 4000;
   const height = 3000;
-  const nodeWidth = 160;
-  const nodeHeight = 70;
-  const horizontalGap = 40;
-  const verticalGap = 140;
 
   const svg = d3
     .select(treeRef.current)
     .append("svg")
     .attr("width", width)
-    .attr("height", height);
+    .attr("height", height)
+    .style("overflow", "visible");
 
   const g = svg.append("g");
 
-  /* ---------- BUILD DATA ---------- */
-
-  const peopleArr = Object.values(people);
-
-  const childrenMap = {};
-  peopleArr.forEach(p => {
-    (p.parents || []).forEach(pid => {
-      if (!childrenMap[pid]) childrenMap[pid] = [];
-      childrenMap[pid].push(p.id);
-    });
+  /* ---------- NORMALIZE DATA ---------- */
+  const nodes = {};
+  Object.values(people).forEach((p) => {
+    nodes[p.id] = { ...p, children: [] };
   });
 
-  /* ---------- GENERATIONS ---------- */
+  let root = null;
 
-  const generation = {};
-  function computeGen(id) {
-    if (generation[id] !== undefined) return generation[id];
-    const parents = people[id].parents || [];
-    if (parents.length === 0) return (generation[id] = 0);
-    return (generation[id] =
-      Math.max(...parents.map(p => computeGen(p))) + 1);
-  }
-
-  peopleArr.forEach(p => computeGen(p.id));
-
-  const levels = {};
-  peopleArr.forEach(p => {
-    const g = generation[p.id];
-    if (!levels[g]) levels[g] = [];
-    levels[g].push(p.id);
-  });
-
-  /* ---------- COUPLES ---------- */
-
-  const used = new Set();
-  const nodes = [];
-
-  Object.keys(levels).forEach(level => {
-    let x = 100;
-
-    levels[level].forEach(id => {
-      if (used.has(id)) return;
-
-      const p = people[id];
-      if (p.spouse && people[p.spouse] && generation[p.spouse] === generation[id]) {
-        used.add(id);
-        used.add(p.spouse);
-
-        nodes.push({
-          type: "couple",
-          parents: [id, p.spouse],
-          x,
-          y: level * verticalGap + 50
-        });
-
-        x += nodeWidth * 2 + horizontalGap;
-      } else {
-        used.add(id);
-        nodes.push({
-          type: "single",
-          id,
-          x,
-          y: level * verticalGap + 50
-        });
-        x += nodeWidth + horizontalGap;
+  Object.values(nodes).forEach((p) => {
+    if (p.parents && p.parents.length > 0) {
+      const primaryParent = p.parents[0]; // 👈 SINGLE PARENT RULE
+      if (nodes[primaryParent]) {
+        nodes[primaryParent].children.push(p);
       }
-    });
-  });
-
-  /* ---------- DRAW LINKS ---------- */
-
-  nodes.forEach(n => {
-    const kids =
-      n.type === "couple"
-        ? (childrenMap[n.parents[0]] || []).filter(
-            c => (people[c].parents || []).includes(n.parents[1])
-          )
-        : childrenMap[n.id] || [];
-
-    kids.forEach(cid => {
-      const childNode = nodes.find(nn =>
-        nn.type === "single"
-          ? nn.id === cid
-          : nn.parents.includes(cid)
-      );
-      if (!childNode) return;
-
-      svg
-        .append("line")
-        .attr("x1", n.x + nodeWidth)
-        .attr("y1", n.y + nodeHeight)
-        .attr("x2", childNode.x + nodeWidth / 2)
-        .attr("y2", childNode.y)
-        .attr("stroke", "#888")
-        .attr("stroke-width", 2);
-    });
-  });
-
-  /* ---------- DRAW NODES ---------- */
-
-  nodes.forEach(n => {
-    if (n.type === "couple") {
-      n.parents.forEach((pid, i) => {
-        drawPerson(pid, n.x + i * nodeWidth, n.y);
-      });
     } else {
-      drawPerson(n.id, n.x, n.y);
+      root = p;
     }
   });
 
-  function drawPerson(id, x, y) {
-    const p = people[id];
+  if (!root) return;
 
-    const group = svg
+  /* ---------- BUILD TREE ---------- */
+  const treeLayout = d3.tree().nodeSize([160, 200]);
+  const hierarchy = d3.hierarchy(root);
+  treeLayout(hierarchy);
+
+  /* ---------- LINKS ---------- */
+  g.selectAll(".link")
+    .data(hierarchy.links())
+    .enter()
+    .append("path")
+    .attr("class", "link")
+    .attr("fill", "none")
+    .attr("stroke", "#ccc")
+    .attr(
+      "d",
+      d3
+        .linkVertical()
+        .x((d) => d.x)
+        .y((d) => d.y)
+    );
+
+  /* ---------- NODES ---------- */
+  const node = g
+    .selectAll(".node")
+    .data(hierarchy.descendants())
+    .enter()
+    .append("g")
+    .attr("class", "node")
+    .attr("transform", (d) => `translate(${d.x},${d.y})`);
+
+  node
+    .append("rect")
+    .attr("x", -60)
+    .attr("y", -30)
+    .attr("width", 120)
+    .attr("height", 60)
+    .attr("rx", 10)
+    .attr("fill", "#fff")
+    .attr("stroke", "#b91c1c")
+    .attr("stroke-width", 2)
+    .on("click", (_, d) => openEdit(d.data.id));
+
+  node
+    .append("text")
+    .attr("text-anchor", "middle")
+    .attr("dy", "0.35em")
+    .style("font-size", "12px")
+    .text((d) => d.data.name);
+
+  /* ---------- SPOUSES (SIDE BY SIDE) ---------- */
+  hierarchy.descendants().forEach((d) => {
+    const spouseId = d.data.spouse;
+    if (!spouseId || !nodes[spouseId]) return;
+
+    g.append("line")
+      .attr("x1", d.x)
+      .attr("y1", d.y)
+      .attr("x2", d.x + 120)
+      .attr("y2", d.y)
+      .attr("stroke", "#999");
+
+    const spouse = nodes[spouseId];
+
+    const sg = g
       .append("g")
-      .attr("transform", `translate(${x}, ${y})`)
-      .style("cursor", "pointer")
-      .on("click", () => openEdit(id));
+      .attr("transform", `translate(${d.x + 120}, ${d.y})`);
 
-    group
-      .append("rect")
-      .attr("width", nodeWidth)
-      .attr("height", nodeHeight)
-      .attr("rx", 8)
+    sg.append("rect")
+      .attr("x", -60)
+      .attr("y", -30)
+      .attr("width", 120)
+      .attr("height", 60)
+      .attr("rx", 10)
       .attr("fill", "#fff")
       .attr("stroke", "#b91c1c")
-      .attr("stroke-width", 2);
+      .attr("stroke-width", 2)
+      .on("click", () => openEdit(spouse.id));
 
-    group
-      .append("text")
-      .attr("x", nodeWidth / 2)
-      .attr("y", 28)
+    sg.append("text")
       .attr("text-anchor", "middle")
-      .attr("font-weight", "bold")
-      .text(p.name);
+      .attr("dy", "0.35em")
+      .style("font-size", "12px")
+      .text(spouse.name);
+  });
 
-    group
-      .append("text")
-      .attr("x", nodeWidth / 2)
-      .attr("y", 48)
-      .attr("text-anchor", "middle")
-      .attr("font-size", "12px")
-      .text(
-        `${p.birth || ""}${p.death ? " – " + p.death : ""}`
-      );
-  }
+  applyTransform();
 }
+
 
   /* ------------------------- PAN / ZOOM LOGIC ------------------------- */
   function applyTransform() {
